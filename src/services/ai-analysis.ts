@@ -7,7 +7,8 @@ let convexClient: ConvexHttpClient | null = null;
 
 function getConvexClient(): ConvexHttpClient {
   if (!convexClient) {
-    const convexUrl = import.meta.env.VITE_CONVEX_URL;
+    // Convex auto-injects VITE_CONVEX_URL during dev and build
+    const convexUrl = import.meta.env.VITE_CONVEX_URL as string;
     if (!convexUrl) {
       throw new Error("VITE_CONVEX_URL is not configured");
     }
@@ -17,8 +18,8 @@ function getConvexClient(): ConvexHttpClient {
 }
 
 /**
- * Analyze product using Gemini AI via Convex action
- * Falls back to mock analysis if Gemini is unavailable
+ * Analyze product using Gemini AI via Convex action (server-side).
+ * Falls back to mock analysis if Gemini is unavailable.
  */
 export async function analyzeProduct(
   imageDataUrl?: string,
@@ -26,39 +27,19 @@ export async function analyzeProduct(
 ): Promise<AIAnalysisResult> {
   try {
     const client = getConvexClient();
-
-    // Call the Convex action which uses Gemini API
     const analysisResult = await client.action(api.gemini.analyzeProduct, {
       imageDataUrl,
       userDescription,
     });
-
     return analysisResult as AIAnalysisResult;
   } catch (error) {
     console.warn("Gemini analysis failed, using mock analysis:", error);
-    // Fall back to mock analysis
     return getMockAnalysis(imageDataUrl, userDescription);
   }
 }
 
-/**
- * Check if Gemini API is configured
- */
-export async function isGeminiConfigured(): Promise<boolean> {
-  try {
-    const client = getConvexClient();
-    // Try a simple text-only call to check if the API key is set
-    await client.action(api.gemini.analyzeProduct, {
-      imageDataUrl: undefined,
-      userDescription: "test product",
-    });
-    return true;
-  } catch {
-    return false;
-  }
-}
+// ── Mock analysis fallback ──────────────────────────────────────────────────
 
-// Mock analysis as fallback
 const productTemplates: Record<string, AIAnalysisResult> = {
   pottery: {
     name: "Handcrafted Terracotta Pot",
@@ -75,7 +56,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Handwoven Cotton Scarf",
     category: "Fashion & Textiles",
     description:
-      "Exquisite handwoven cotton scarf crafted by skilled artisans using traditional weaving techniques. Features vibrant patterns inspired by regional Indian textile traditions. Lightweight, comfortable, and perfect for any occasion.",
+      "Exquisite handwoven cotton scarf crafted by skilled artisans using traditional weaving techniques. Features vibrant patterns inspired by regional Indian textile traditions.",
     materials: ["Organic Cotton", "Natural Dyes"],
     tags: ["Handwoven", "Fashion", "Sustainable", "Traditional", "Handmade"],
     price: 1200,
@@ -86,7 +67,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Carved Wooden Box",
     category: "Woodwork",
     description:
-      "Intricately carved wooden box made from sustainable Sheesham wood. This handcrafted piece features detailed floral motifs and is perfect for storing jewellery, keepsakes, or as a decorative accent. Each box is unique, reflecting the artisan's skill.",
+      "Intricately carved wooden box made from sustainable Sheesham wood. Features detailed floral motifs and is perfect for storing jewellery or as a decorative accent.",
     materials: ["Sheesham Wood", "Natural Polish", "Brass Inlay"],
     tags: ["Handmade", "Woodwork", "Decorative", "Storage", "Sustainable"],
     price: 1800,
@@ -97,7 +78,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Sterling Silver Pendant",
     category: "Jewellery",
     description:
-      "Beautiful sterling silver pendant featuring traditional Indian motifs. Handcrafted by tribal artisans using age-old jewellery-making techniques. A stunning piece that blends heritage with contemporary style.",
+      "Beautiful sterling silver pendant featuring traditional Indian motifs. Handcrafted by tribal artisans using age-old jewellery-making techniques.",
     materials: ["Sterling Silver", "Oxidized Finish"],
     tags: ["Handmade", "Jewellery", "Tribal", "Fashion", "Gift"],
     price: 1500,
@@ -108,7 +89,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Folk Art Canvas Painting",
     category: "Paintings & Art",
     description:
-      "Vibrant folk art painting created using natural pigments on handmade canvas. Depicts a traditional scene with rich colors and intricate detailing. A stunning piece of authentic Indian folk art for your walls.",
+      "Vibrant folk art painting created using natural pigments on handmade canvas. Depicts a traditional scene with rich colors and intricate detailing.",
     materials: ["Canvas", "Natural Pigments", "Plant-based Colors"],
     tags: ["Folk Art", "Painting", "Wall Decor", "Traditional", "Authentic"],
     price: 2200,
@@ -119,7 +100,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Handwoven Bamboo Basket",
     category: "Handicrafts",
     description:
-      "Beautiful handcrafted bamboo basket made by skilled rural artisans. Features intricate weaving patterns and a sturdy design. Perfect for home decor, storage, or as a decorative accent piece.",
+      "Beautiful handcrafted bamboo basket made by skilled rural artisans. Features intricate weaving patterns and a sturdy design.",
     materials: ["Bamboo", "Natural Fiber", "Cotton Thread"],
     tags: ["Eco-Friendly", "Handmade", "Storage", "Decorative", "Bamboo"],
     price: 800,
@@ -130,7 +111,7 @@ const productTemplates: Record<string, AIAnalysisResult> = {
     name: "Handcrafted Artisan Product",
     category: "Handicrafts",
     description:
-      "A unique handcrafted product made by skilled artisans using traditional techniques. This piece showcases excellent craftsmanship and attention to detail, making it a perfect addition to any collection or a thoughtful gift.",
+      "A unique handcrafted product made by skilled artisans using traditional techniques. Showcases excellent craftsmanship and attention to detail.",
     materials: ["Natural Materials", "Hand-finished"],
     tags: ["Handmade", "Artisan", "Unique", "Traditional"],
     price: 1200,

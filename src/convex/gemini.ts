@@ -2,7 +2,6 @@
 
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { GoogleGenAI } from "@google/genai";
 
 const GEMINI_MODEL = "gemini-2.0-flash";
 
@@ -42,8 +41,6 @@ export const analyzeProduct = action({
       );
     }
 
-    const client = new GoogleGenAI({ apiKey });
-
     // Build the text prompt
     let promptText = ANALYSIS_PROMPT;
     if (args.userDescription) {
@@ -52,92 +49,61 @@ export const analyzeProduct = action({
       promptText += `\n\nNo additional description provided. Analyze based on the image alone.`;
     }
 
-    try {
-      // Use the generateContent API which is simpler and more reliable
-      const contentParts: string[] = [promptText];
+    // Build parts array for the request
+    const parts: Array<Record<string, unknown>> = [{ text: promptText }];
 
-      // If we have an image, we need to use the multimodal input
-      // For simplicity, let's use the generateContent with proper types
-      let response;
-
-      if (args.imageDataUrl) {
-        // Extract mime type and base64 data from data URL
-        const match = args.imageDataUrl.match(
-          /^data:(image\/\w+);base64,(.+)$/
-        );
-
-        if (match) {
-          // Use the REST API directly for multimodal content
-          const apiKey2 = apiKey;
-          const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey2}`;
-
-          const requestBody = {
-            contents: [
-              {
-                parts: [
-                  { text: promptText },
-                  {
-                    inline_data: {
-                      mime_type: match[1],
-                      data: match[2],
-                    },
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              temperature: 0.7,
-              maxOutputTokens: 1024,
-            },
-          };
-
-          const apiResponse = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(requestBody),
-          });
-
-          if (!apiResponse.ok) {
-            const errorData = await apiResponse.json().catch(() => ({}));
-            throw new Error(
-              `Gemini API error: ${apiResponse.status} - ${JSON.stringify(errorData)}`
-            );
-          }
-
-          const data = await apiResponse.json();
-          const responseText =
-            data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-          return parseAnalysisResponse(responseText);
-        }
+    // Add image if provided
+    if (args.imageDataUrl) {
+      const match = args.imageDataUrl.match(
+        /^data:(image\/[\w+]+);base64,(.+)$/
+      );
+      if (match) {
+        parts.push({
+          inline_data: {
+            mime_type: match[1],
+            data: match[2],
+          },
+        });
       }
+    }
 
-      // Text-only fallback using the SDK
-      response = await client.models.generateContent({
-        model: GEMINI_MODEL,
-        contents: promptText,
-        config: {
+    // Call Gemini API via REST (avoids SDK typing issues, runs server-side)
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
+
+    const apiResponse = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts }],
+        generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1024,
+          responseMimeType: "application/json",
         },
-      });
+      }),
+    });
 
-      const responseText = response.text || "";
-      return parseAnalysisResponse(responseText);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("JSON")) {
-        throw new Error(
-          "AI returned an invalid response. Please try again with a clearer image or description."
-        );
-      }
-      throw new Error(`Gemini API error: ${message}`);
+    if (!apiResponse.ok) {
+      const errorData = await apiResponse.json().catch(() => ({}));
+      const errorMsg =
+        errorData?.error?.message || `HTTP ${apiResponse.status}`;
+      throw new Error(`Gemini API error: ${errorMsg}`);
     }
+
+    const data = await apiResponse.json();
+    const responseText =
+      data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    if (!responseText) {
+      throw new Error("Gemini returned an empty response");
+    }
+
+    return parseAnalysisResponse(responseText);
   },
 });
 
 function parseAnalysisResponse(responseText: string) {
-  // Try to parse JSON from the response
+  // Strip markdown code fences if present
   let jsonStr = responseText.trim();
   const jsonMatch = jsonStr.match(/```(?:json)?\s*([\s\S]*?)```/);
   if (jsonMatch) {
