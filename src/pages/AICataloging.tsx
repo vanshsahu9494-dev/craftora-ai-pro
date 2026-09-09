@@ -31,7 +31,6 @@ import {
   BarChart3,
   LogOut,
   User,
-  Eye,
 } from "lucide-react";
 
 const STEPS = [
@@ -122,6 +121,7 @@ export default function AICataloging() {
   const [price, setPrice] = useState("");
   const [materials, setMaterials] = useState("");
   const [tags, setTags] = useState("");
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   const {
     isListening,
@@ -148,18 +148,30 @@ export default function AICataloging() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
-  const startAnalysis = useCallback(() => {
+  const startAnalysis = useCallback(async () => {
     setStep(3);
     setIsAnalyzing(true);
     setAnalysisProgress(0);
-    const interval = setInterval(() => {
+    setAnalysisError(null);
+
+    // Simulate progress while API call is in progress
+    const progressInterval = setInterval(() => {
       setAnalysisProgress((prev) => {
-        if (prev >= 100) { clearInterval(interval); return 100; }
-        return prev + 4;
+        if (prev >= 90) {
+          clearInterval(progressInterval);
+          return 90;
+        }
+        return prev + 2;
       });
     }, 100);
-    setTimeout(() => {
-      const result = analyzeProduct(productName || imagePreview || undefined);
+
+    try {
+      // Call the Gemini API via Convex action
+      const result = await analyzeProduct(
+        imagePreview || undefined,
+        description || undefined
+      );
+
       setAnalysisResult(result);
       setProductName(result.name);
       setCategory(result.category);
@@ -167,11 +179,19 @@ export default function AICataloging() {
       setPrice(result.price.toString());
       setMaterials(result.materials.join(", "));
       setTags(result.tags.join(", "));
-      setIsAnalyzing(false);
-      clearInterval(interval);
       setAnalysisProgress(100);
-    }, 2500);
-  }, [productName, imagePreview, description]);
+    } catch (error) {
+      console.error("Analysis failed:", error);
+      setAnalysisError(
+        error instanceof Error
+          ? error.message
+          : "Analysis failed. Please try again."
+      );
+    } finally {
+      clearInterval(progressInterval);
+      setIsAnalyzing(false);
+    }
+  }, [imagePreview, description]);
 
   const handlePublish = useCallback(() => {
     const currentUser = getCurrentUser();
@@ -336,34 +356,54 @@ export default function AICataloging() {
                   <Sparkles className="w-8 h-8 text-white" />
                 </motion.div>
                 <h2 className="text-xl font-bold text-[#2D1B0E] mb-1">
-                  {isAnalyzing ? "AI is analyzing your product…" : "Analysis Complete!"}
+                  {isAnalyzing ? "AI is analyzing your product…" : analysisError ? "Analysis Failed" : "Analysis Complete!"}
                 </h2>
-                <p className="text-[#6B5E50] text-sm mb-8">{isAnalyzing ? "This will only take a moment" : "Your product has been analyzed"}</p>
+                <p className="text-[#6B5E50] text-sm mb-8">
+                  {isAnalyzing ? "Using Gemini AI to analyze your product" : analysisError ? "Please try again or check your API key" : "Your product has been analyzed"}
+                </p>
 
-                <div className="max-w-md mx-auto space-y-4 text-left">
-                  {analysisSteps.map((s, i) => (
-                    <div key={s.label} className="flex items-center gap-3">
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center ${analysisProgress >= s.threshold ? "bg-[#2E7D5B] text-white" : "bg-[#E5DED4] text-[#6B5E50]"}`}>
-                        {analysisProgress >= s.threshold ? <Check className="w-3 h-3" /> : <span className="text-xs">{i + 1}</span>}
-                      </div>
-                      <span className={`text-sm ${analysisProgress >= s.threshold ? "text-[#2E7D5B] font-medium" : "text-[#6B5E50]"}`}>{s.label}</span>
+                {analysisError ? (
+                  <div className="max-w-md mx-auto">
+                    <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
+                      <p className="text-red-700 text-sm">{analysisError}</p>
                     </div>
-                  ))}
-                </div>
-
-                <div className="max-w-md mx-auto mt-6">
-                  <div className="h-2 bg-[#E5DED4] rounded-full overflow-hidden">
-                    <motion.div className="h-full bg-gradient-to-r from-[#1A5E4B] to-[#2E7D5B] rounded-full" initial={{ width: 0 }} animate={{ width: `${analysisProgress}%` }} />
+                    <div className="flex gap-4 justify-center">
+                      <Button variant="outline" onClick={() => setStep(1)} className="border-[#6B5E50] text-[#6B5E50]">
+                        <ArrowLeft className="w-4 h-4 mr-2" /> Go Back
+                      </Button>
+                      <Button className="bg-[#1A5E4B] hover:bg-[#164E3E] text-white" onClick={startAnalysis}>
+                        <Sparkles className="w-4 h-4 mr-2" /> Try Again
+                      </Button>
+                    </div>
                   </div>
-                  <p className="text-xs text-center text-[#6B5E50] mt-2">{analysisProgress}%</p>
-                </div>
+                ) : (
+                  <>
+                    <div className="max-w-md mx-auto space-y-4 text-left">
+                      {analysisSteps.map((s, i) => (
+                        <div key={s.label} className="flex items-center gap-3">
+                          <div className={`w-6 h-6 rounded-full flex items-center justify-center ${analysisProgress >= s.threshold ? "bg-[#2E7D5B] text-white" : "bg-[#E5DED4] text-[#6B5E50]"}`}>
+                            {analysisProgress >= s.threshold ? <Check className="w-3 h-3" /> : <span className="text-xs">{i + 1}</span>}
+                          </div>
+                          <span className={`text-sm ${analysisProgress >= s.threshold ? "text-[#2E7D5B] font-medium" : "text-[#6B5E50]"}`}>{s.label}</span>
+                        </div>
+                      ))}
+                    </div>
 
-                {!isAnalyzing && (
-                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
-                    <Button className="bg-[#1A5E4B] hover:bg-[#164E3E] text-white px-8" onClick={() => setStep(4)}>
-                      Review & Publish <ArrowRight className="w-4 h-4 ml-2" />
-                    </Button>
-                  </motion.div>
+                    <div className="max-w-md mx-auto mt-6">
+                      <div className="h-2 bg-[#E5DED4] rounded-full overflow-hidden">
+                        <motion.div className="h-full bg-gradient-to-r from-[#1A5E4B] to-[#2E7D5B] rounded-full" initial={{ width: 0 }} animate={{ width: `${analysisProgress}%` }} />
+                      </div>
+                      <p className="text-xs text-center text-[#6B5E50] mt-2">{analysisProgress}%</p>
+                    </div>
+
+                    {!isAnalyzing && (
+                      <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+                        <Button className="bg-[#1A5E4B] hover:bg-[#164E3E] text-white px-8" onClick={() => setStep(4)}>
+                          Review & Publish <ArrowRight className="w-4 h-4 ml-2" />
+                        </Button>
+                      </motion.div>
+                    )}
+                  </>
                 )}
               </div>
             </motion.div>
