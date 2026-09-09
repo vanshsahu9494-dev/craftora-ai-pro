@@ -50,12 +50,10 @@ export const analyzeProduct = action({
     }
 
     // Build parts array for the request
-    const parts: Array<Record<string, unknown>> = [{ text: promptText }];
-
-    // Add image if provided
+    const parts: Array<Record<string, unknown>> = [{ text: promptText }];    // Add image if provided
     if (args.imageDataUrl) {
       const match = args.imageDataUrl.match(
-        /^data:(image\/[\w+]+);base64,(.+)$/
+        /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/s
       );
       if (match) {
         parts.push({
@@ -78,7 +76,6 @@ export const analyzeProduct = action({
         generationConfig: {
           temperature: 0.7,
           maxOutputTokens: 1024,
-          responseMimeType: "application/json",
         },
       }),
     });
