@@ -101,7 +101,7 @@ function RouteSyncer() {
 // VlyToolbar is injected by the platform build; not available in prod
 let VlyToolbar: React.ComponentType = () => null;
 try {
-  const mod = await import("../vly-toolbar-readonly.tsx").catch(() => null);
+  const mod = await import(/* @vite-ignore */ "../vly-toolbar-readonly.tsx").catch(() => null);
   if (mod) VlyToolbar = mod.VlyToolbar;
 } catch {
   // Ignore - toolbar not available
