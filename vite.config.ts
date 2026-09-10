@@ -21,7 +21,6 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
-    // Force a single copy of React across all packages (including vlyPlugin).
     dedupe: ["react", "react/jsx-runtime", "react-dom", "react-dom/client"],
   },
   build: {
@@ -29,7 +28,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          "vendor": ["react", "react-dom", "react-router", "convex", "framer-motion", "recharts"],
+          vendor: ["react", "react-dom", "react-router", "convex", "framer-motion", "recharts"],
         },
         chunkFileNames: "assets/[name]-[hash].js",
         entryFileNames: "assets/[name]-[hash].js",
